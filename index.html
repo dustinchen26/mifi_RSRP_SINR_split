@@ -1,0 +1,194 @@
+<!-- 
+  Copyright © [2023] [Dustin_Chen]. All rights reserved.
+  Author: Dustin_Chen
+  Email:  Dustin_Chen@compal.com or chuhpsdustin@gmail.com
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mifi_RSRP_SINR_split</title>
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      line-height: 1.2;
+      font-size: 14px;
+    }
+
+    .chart-container {
+      display: flex;
+      flex-wrap: wrap; /* 自動換行顯示多張圖 */
+      gap: 10px; /* 圖表之間的間距 */
+      justify-content: space-between; /* 平均分布圖表 */
+    }
+
+    .chart-pair {
+      width: 50%; /* 每對圖表占用一半寬度 */
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+    }
+
+    canvas {
+      width: 48%; /* 每張圖表占容器寬度的 48% */
+      height: 300px; /* 調整高度 */
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    function parseLog() {
+      var inputText = document.getElementById('logInput').value;
+
+      // 使用正則表達式捕獲時間、RSRP 和 SINR 數據
+      var regex = /(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})[\s\S]*?RSRQ\s*(-?\d+)\s*dB,\s*RSRP\s*(-?\d+)\s*dBm,\s*SINR\s*(\d+)\s*dB/g;
+
+      var matches = inputText.matchAll(regex);
+      var timeData = [], rsrpData = [], sinrData = [];
+
+      // 提取匹配的數據
+      for (const match of matches) {
+        if (match && match.length === 5) {
+          timeData.push(match[1]);        // 時間戳
+          rsrpData.push(parseInt(match[3]));  // RSRP 數值
+          sinrData.push(parseInt(match[4]));  // SINR 數值
+        }
+      }
+
+      // 按每小時分組
+      const groupedData = groupDataByHour(timeData, rsrpData, sinrData);
+
+      // 動態生成圖表
+      plotGroupedData(groupedData);
+    }
+
+    function groupDataByHour(timeData, rsrpData, sinrData) {
+      const grouped = [];
+      let currentGroup = { time: [], rsrp: [], sinr: [] };
+      let startTime = new Date(timeData[0]);
+
+      for (let i = 0; i < timeData.length; i++) {
+        const currentTime = new Date(timeData[i]);
+        const diffInHours = (currentTime - startTime) / (1000 * 60 * 60);
+
+        if (diffInHours >= 1) {
+          // 當前組完成，推入分組數據
+          grouped.push(currentGroup);
+          currentGroup = { time: [], rsrp: [], sinr: [] };
+          startTime = currentTime;
+        }
+
+        currentGroup.time.push(timeData[i]);
+        currentGroup.rsrp.push(rsrpData[i]);
+        currentGroup.sinr.push(sinrData[i]);
+      }
+
+      // 將最後一組數據添加
+      if (currentGroup.time.length > 0) {
+        grouped.push(currentGroup);
+      }
+
+      return grouped;
+    }
+
+    function plotGroupedData(groupedData) {
+      const chartContainer = document.getElementById('chartsContainer');
+      chartContainer.innerHTML = ''; // 清空之前的圖表
+
+      groupedData.forEach((group, index) => {
+        // 創建一對圖表容器
+        const chartPair = document.createElement('div');
+        chartPair.className = 'chart-pair';
+
+        // 動態創建 RSRP canvas 元素
+        const rsrpCanvas = document.createElement('canvas');
+        rsrpCanvas.id = `myChartRSRP_${index}`;
+        chartPair.appendChild(rsrpCanvas);
+
+        // 動態創建 SINR canvas 元素
+        const sinrCanvas = document.createElement('canvas');
+        sinrCanvas.id = `myChartSINR_${index}`;
+        chartPair.appendChild(sinrCanvas);
+
+        // 將這對圖表添加到容器
+        chartContainer.appendChild(chartPair);
+
+        // 繪製圖表
+        plotChart(rsrpCanvas, group.time, group.rsrp, 'RSRP (dBm)', 'rgba(255, 0, 0, 1)', 'rgba(255, 99, 71, 0.2)');
+        plotChart(sinrCanvas, group.time, group.sinr, 'SINR (dB)', 'green', null);
+      });
+    }
+
+    function plotChart(canvas, timeData, data, label, borderColor, backgroundColor) {
+      new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: timeData, // 時間數據作為 x 軸標籤
+          datasets: [
+            {
+              label: label,
+              data: data,
+              borderColor: borderColor,
+              backgroundColor: backgroundColor,
+              borderWidth: 1,
+              fill: !!backgroundColor, // 是否填充背景
+              pointRadius: 0 // 隱藏折線上的點
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false, // 禁用默認比例，允許更小的顯示
+          scales: {
+            x: {
+              type: 'category',
+              title: {
+                display: true,
+                text: 'Time'
+              },
+              ticks: {
+                autoSkip: true,
+                maxRotation: 30, // 減少旋轉角度
+                minRotation: 30
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: label
+              }
+            }
+          }
+        }
+      });
+    }
+  </script>
+</head>
+
+<body>
+  <h2>mifi_RSRP_SINR_split</h2>
+  <p style="margin: 0;">Author: Dustin_Chen, email: <a href="mailto:Dustin_Chen@compal.com" style="line-height: 1;">Dustin_Chen@compal.com</a> or <a href="mailto:chuhpsdustin@gmail.com" style="line-height: 1;">chuhpsdustin@gmail.com</a></p>
+  <ul>
+    <li><strong>【How to use】</strong>
+      <ul>
+        <li>step0. Set the UE time correctly. ex:<br>
+          <span class="red">date -s "2024-08-20 09:03:50"</span>
+        </li>
+        <li>step1. MobaXterm Session -> SSH -> Terminal settings -> Select "Log terminal output to": _DesktopDir_</li>
+        <li>step2. ssh into mifi. ex: 10.205.164.22 </li>
+        <li>step3. "Mifi" use below command to run 10 times <br>
+          <span class="red">watch -n 1 'echo "$(date "+%Y-%m-%d %H:%M:%S")"; atcli at+cesqdbm'</span>
+        </li>
+        <li>step4. paste the _DesktopDir_ output file content below to parse</li>
+      </ul>
+    </li>
+  </ul>
+  <textarea id="logInput" rows="10" cols="80"></textarea>
+  <br>
+  <button onclick="parseLog()">Parse and Plot</button>
+  <div id="chartsContainer" class="chart-container"></div> <!-- 動態添加圖表 -->
+</body>
+
+</html>
